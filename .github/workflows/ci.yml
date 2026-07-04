@@ -1,0 +1,33 @@
+# CI — lightweight check (no data, no GPU).
+#
+# 범위: 코드가 안 깨지는지만 확인한다.
+#   - flake8 치명오류(구문/미정의) + numpy-only 합성 스모크 파이프라인.
+#   - torch/CUDA·실데이터(METR-LA/PEMS-BAY)는 로컬·수동 실행 대상이라 CI 대상이 아니다
+#     (설치 실패·데이터 부재로 매번 red 방지). 스모크는 합성 텐서만 쓴다.
+name: CI (lightweight)
+
+on: [push, pull_request]
+
+jobs:
+  lint-and-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install minimal deps (numpy-only pipeline)
+        run: |
+          python -m pip install --upgrade pip
+          pip install numpy flake8
+
+      - name: Lint — fatal errors only (syntax / undefined names)
+        run: |
+          flake8 common src scripts --count --select=E9,F63,F7,F82 --show-source --statistics
+
+      - name: Smoke — synthetic traffic baseline -> metrics pipeline (numpy-only)
+        run: |
+          bash scripts/smoke.sh
