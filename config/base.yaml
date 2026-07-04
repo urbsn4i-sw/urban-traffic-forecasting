@@ -5,17 +5,26 @@
 # =====================================================================
 seed: 42
 
-# --- 데이터 ---
+# --- 데이터 (기본 선택; 데이터셋별 파일은 아래 datasets 레지스트리) ---
 data:
-  dataset: metr-la          # metr-la(207센서) | pems-bay(325센서)
+  dataset: metr-la          # 기본: metr-la | pems-bay (CLI --dataset 로 오버라이드)
   root: data                # .gitignore 로 커밋 차단됨
-  h5_file: metr-la.h5       # 속도 행렬 (T × N)
-  adj_file: adj_mx.pkl      # 센서 간 도로망 거리 기반 인접행렬
   sample_freq_min: 5        # 5분 간격
   null_val: 0.0             # 결측=0 (지표/HA 에서 마스크로 제외)
   train_ratio: 0.7
   val_ratio: 0.1
   test_ratio: 0.2           # DCRNN 표준 7:1:2 시간순 분할
+
+# --- 데이터셋 레지스트리 (센서 수 N 은 h5 컬럼에서 자동 추론 — 하드코딩 없음) ---
+datasets:
+  metr-la:                  # 207 센서, LA, 2012 (결측 ~8%)
+    h5_file: metr-la.h5
+    dist_csv: sensor_graph/distances_la_2012.csv
+    dist_csv_has_header: true
+  pems-bay:                 # 325 센서, Bay Area, 2017 (결측 ~0%)
+    h5_file: pems-bay.h5
+    dist_csv: sensor_graph/distances_bay_2017.csv
+    dist_csv_has_header: false
 
 # --- 시간 프로토콜 (DCRNN/Graph WaveNet 표준) ---
 temporal:

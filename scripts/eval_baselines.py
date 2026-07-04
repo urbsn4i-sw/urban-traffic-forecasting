@@ -90,9 +90,23 @@ def evaluate(series, t_in, horizon, ratios, period, null_val, horizons):
     return results, meta
 
 
+DISPLAY = {"metr-la": "METR-LA", "pems-bay": "PEMS-BAY"}
+# 논문 HA 참조값(reference only) — 데이터셋별. DCRNN(Li+ 2018) 논문 Table. 직접 비교 아님.
+HA_REF = {
+    "metr-la": {"mae": {"h3": 4.16, "h6": 4.16, "h12": 4.16},
+                "rmse": {"h3": 7.80, "h6": 7.80, "h12": 7.80},
+                "mape_pct": {"h3": 13.0, "h6": 13.0, "h12": 13.0}},
+    "pems-bay": {"mae": {"h3": 2.88, "h6": 2.88, "h12": 2.88},
+                 "rmse": {"h3": 5.59, "h6": 5.59, "h12": 5.59},
+                 "mape_pct": {"h3": 6.8, "h6": 6.8, "h12": 6.8}},
+}
+
+
 def main(argv=None) -> int:
-    p = argparse.ArgumentParser(description="METR-LA 기준선 실측 (Phase 1)")
+    p = argparse.ArgumentParser(description="교통 기준선 실측 (METR-LA / PEMS-BAY)")
     p.add_argument("--config", type=Path, default=_TASK_DIR / "config" / "base.yaml")
+    p.add_argument("--dataset", default=None, choices=["metr-la", "pems-bay"],
+                   help="config data.dataset 오버라이드")
     p.add_argument("--out", type=Path, default=None, help="결과 디렉토리(기본: results/<run_id>)")
     args = p.parse_args(argv)
 
@@ -104,6 +118,9 @@ def main(argv=None) -> int:
 
     import numpy as np
     cfg = load_config(args.config)
+    dataset = args.dataset or str(cfg["data"]["dataset"])
+    ds = cfg["datasets"][dataset]
+    ds_name = DISPLAY.get(dataset, dataset)
     seed = set_seed(int(cfg.get("seed", 42)))
 
     t_in = int(cfg["temporal"]["seq_len_in"])
@@ -115,7 +132,7 @@ def main(argv=None) -> int:
     period = 7 * 24 * 12  # 1주 = 2016 스텝 @5분 (DCRNN HA 주기)
 
     data_dir = _TASK_DIR / cfg["data"]["root"]
-    h5 = data_dir / cfg["data"]["h5_file"]
+    h5 = data_dir / ds["h5_file"]
     series = D.load_h5_traffic(h5)                     # (T, N); 없으면 FileNotFoundError
     T, N = series.shape
 
@@ -133,15 +150,15 @@ def main(argv=None) -> int:
     # --- 기준선 실측 ---
     results, meta = evaluate(series, t_in, horizon, ratios, period, null_val, horizons)
 
-    run_id = datetime.now(timezone.utc).strftime("baselines-metr-la-%Y%m%dT%H%M%SZ")
+    run_id = datetime.now(timezone.utc).strftime(f"baselines-{dataset}-%Y%m%dT%H%M%SZ")
     out_dir = args.out or (_TASK_DIR / "results" / run_id)
     out_dir.mkdir(parents=True, exist_ok=True)
 
     metrics = {
         "synthetic_dummy": False,
         "task": "urban-traffic-forecasting",
-        "phase": "Phase 1 — 실 데이터 기준선",
-        "dataset": {"name": "METR-LA", "file": cfg["data"]["h5_file"], "shape_T_N": [int(T), int(N)],
+        "phase": "실 데이터 기준선",
+        "dataset": {"name": ds_name, "id": dataset, "file": ds["h5_file"], "shape_T_N": [int(T), int(N)],
                     "sample_freq_min": 5, "null_val": null_val,
                     "missing_frac_pct": round(float((series == null_val).mean() * 100), 2),
                     "source": "liyaguang/DCRNN Google Drive (연구용 공개)"},
@@ -158,11 +175,9 @@ def main(argv=None) -> int:
                            "saved": "data/processed/scaler.json (gitignore)"}},
         "baselines_test": results,
         "reference_only": {
-            "note": "DCRNN 논문(Li+ 2018, Table 1) METR-LA test 값. subset 동일(full METR-LA)이나 "
-                    "구현 세부(HA 주기/결측처리) 차이로 직접 비교는 주의. 우리 결과로 옮겨 적지 않음.",
-            "historical_average_paper": {"mae": {"h3": 4.16, "h6": 4.16, "h12": 4.16},
-                                         "rmse": {"h3": 7.80, "h6": 7.80, "h12": 7.80},
-                                         "mape_pct": {"h3": 13.0, "h6": 13.0, "h12": 13.0}},
+            "note": f"DCRNN 논문(Li+ 2018, Table 1) {ds_name} test HA 값. 구현 세부(HA 주기/결측처리) "
+                    "차이로 직접 비교는 주의. 우리 결과로 옮겨 적지 않음.",
+            "historical_average_paper": HA_REF.get(dataset, {}),
             "copy_last_paper": "논문 미보고(우리 기준선). 참조값 없음.",
         },
     }
@@ -175,8 +190,8 @@ def main(argv=None) -> int:
         return (f"| {name} | {mae['h3']:.3f} | {mae['h6']:.3f} | {mae['h12']:.3f} "
                 f"| {rmse['h12']:.3f} | {mape['h12']:.2f} | {d['slope']:.4f} | {d['final_over_first']:.3f} |")
     lines = [
-        f"# METR-LA 기준선 실측 — {run_id}", "",
-        f"- 데이터: METR-LA (T,N)=({T},{N}), 결측 {metrics['dataset']['missing_frac_pct']}% (=0 마스크)",
+        f"# {ds_name} 기준선 실측 — {run_id}", "",
+        f"- 데이터: {ds_name} (T,N)=({T},{N}), 결측 {metrics['dataset']['missing_frac_pct']}% (=0 마스크)",
         f"- 프로토콜: 과거 {t_in}스텝 → 미래 {horizon}스텝, 시간순 {ratios[0]:.0%}/{ratios[1]:.0%}/{ratios[2]:.0%}, eval=test",
         f"- 분할(윈도우): train {meta['n_train']} / val {meta['n_val']} / test {meta['n_test']} (총 {meta['num_windows']})",
         f"- seed={seed}, git={metrics['run']['git_commit'][:8]}, device=CPU", "",
@@ -188,12 +203,12 @@ def main(argv=None) -> int:
         "",
         "> RQ2(오차 누적): copy-last 는 지평↑ 오차↑(기울기 양수), seasonal-HA 는 계절 슬롯 기반이라 "
         "지평에 거의 평탄(누적 없음) — 대조가 드러남.",
-        "> 참조용: 논문 HA≈MAE 4.16(평탄). subset/구현 차이로 직접 비교 주의(우리 결과 아님).",
+        f"> 참조용: 논문 HA MAE≈{HA_REF.get(dataset,{}).get('mae',{}).get('h12','—')}(평탄). 구현 차이로 직접 비교 주의(우리 결과 아님).",
     ]
     (out_dir / "summary.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
     # --- 콘솔 요약 ---
-    print(f"[eval] METR-LA 기준선 실측 완료 → {out_dir}")
+    print(f"[eval] {ds_name} 기준선 실측 완료 → {out_dir}")
     print(f"  data (T,N)=({T},{N}) 결측={metrics['dataset']['missing_frac_pct']}%  "
           f"windows: train {meta['n_train']}/val {meta['n_val']}/test {meta['n_test']}")
     for name, key in (("copy-last", "copy_last"), ("seasonal-HA", "seasonal_historical_average")):
