@@ -1,0 +1,65 @@
+# === urban-traffic-forecasting .gitignore ===
+# 원칙: 원데이터·전처리물·가중치·비밀은 "어떤 경로로도" 커밋되지 않게 한다.
+
+# --- 데이터셋 / 파생물 (어떤 하위 경로든) ---
+data/
+**/data/
+*.h5
+*.hdf5
+*.npz
+*.npy
+*.csv          # METR-LA 센서 거리 CSV 등 원/파생 데이터
+**/processed/
+scaler*.json   # z-score 스케일러(데이터 유래)
+
+# --- 가중치 / 체크포인트 / 대용량 아티팩트 (전 경로) ---
+*.pkl
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.bin
+*.zip
+*.tar
+*.tar.gz
+*.7z
+
+# --- 비밀 / 토큰 ---
+.env
+.env.*
+!.env.example
+*.token
+*_token
+secrets.*
+**/secrets/
+
+# --- 파이썬 캐시 / 빌드 ---
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.ipynb_checkpoints/
+
+# --- 실행 산출물 (작은 metrics/표/figure만 화이트리스트로 허용) ---
+# 디렉토리는 먼저 되살려야(!.../) git 이 안으로 들어가 파일 화이트리스트가 먹는다.
+results/**
+!results/**/
+!results/**/metrics.json
+!results/**/*.md
+!results/**/*.png
+outputs/
+runs/
+wandb/
+*.log
+
+# --- 가상환경 / 에디터 / OS ---
+.venv/
+.venv*/
+venv/
+env/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

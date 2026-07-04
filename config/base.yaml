@@ -1,0 +1,66 @@
+# base.yaml — 교통 STGNN (축소 재현) 기본 설정
+# =====================================================================
+# 브리지 논문(DCRNN, Li+ 2018 / Graph WaveNet, Wu+ 2019)에서 확정한 프로토콜만 반영.
+# 하드코딩 금지: 스크립트는 이 config 를 읽고 CLI 로 오버라이드. 성능수치는 넣지 않는다.
+# =====================================================================
+seed: 42
+
+# --- 데이터 ---
+data:
+  dataset: metr-la          # metr-la(207센서) | pems-bay(325센서)
+  root: data                # .gitignore 로 커밋 차단됨
+  h5_file: metr-la.h5       # 속도 행렬 (T × N)
+  adj_file: adj_mx.pkl      # 센서 간 도로망 거리 기반 인접행렬
+  sample_freq_min: 5        # 5분 간격
+  null_val: 0.0             # 결측=0 (지표/HA 에서 마스크로 제외)
+  train_ratio: 0.7
+  val_ratio: 0.1
+  test_ratio: 0.2           # DCRNN 표준 7:1:2 시간순 분할
+
+# --- 시간 프로토콜 (DCRNN/Graph WaveNet 표준) ---
+temporal:
+  seq_len_in: 12            # 과거 12스텝(=60분) 관측
+  horizon: 12               # 미래 12스텝(=60분) 예측
+  # 평가 지평: 3/6/12 스텝 = 15/30/60분
+
+# --- 평가 지표 (PROJECT_GUIDELINE §8) ---
+metrics:
+  horizons: [3, 6, 12]      # 스텝 = 15/30/60분
+  report: [mae, rmse, mape]
+  mask_null: true           # null_val 위치 제외(마스크드 지표)
+  per_step_divergence: true # 스텝별 오차 누적(발산) 관찰 — RQ2
+
+# --- 기준선 ---
+baselines:
+  copy_last: {enabled: true}          # persistence
+  historical_average: {enabled: true} # 단순형(관측 평균). 계절형은 Phase 1 확장
+
+# --- 모델: 소형 STGNN (Graph WaveNet-lite / DCRNN-lite) ---
+model:
+  hidden: 32
+  n_layers: 2
+  diffusion_order: 2        # 확산 그래프 합성곱 K
+  dropout: 0.3
+  node_emb_dim: 10          # adaptive 인접행렬 노드 임베딩 차원
+  # --- 절제 실험 1 (RQ1): 인접행렬 고정 vs 학습 ---
+  adjacency:
+    mode: hybrid            # fixed | learned | hybrid | identity
+    # fixed   : 도로망 거리 고정 A 만
+    # learned : adaptive A 만 (Graph WaveNet 노드 임베딩)
+    # hybrid  : 둘 다
+    # identity: 그래프 없음(대조군)
+    kernel_threshold: 0.1   # 가우시안 커널 희소화 임계값
+
+# --- 학습 (Phase 1 에서 사용) ---
+train:
+  epochs: 50
+  batch_size: 32
+  lr: 0.001
+  weight_decay: 0.0001
+  loss: masked_mae          # 결측 제외 MAE
+  early_stop_patience: 10
+  device: cuda              # RTX 3060 8GB (소형이라 학습 가능). CPU fallback 허용
+
+# --- 산출물 ---
+output:
+  results_dir: results      # metrics.json / 표 / 소형 figure 만 커밋
