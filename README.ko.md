@@ -13,6 +13,14 @@
 실제 실행값(`metrics.json`)만 보고한다. 안 돌린 것은 **한계**로 명시한다. 원데이터·인접행렬·가중치는
 **절대 커밋하지 않으며**(`.gitignore` 차단), `scripts/download_data.sh` 가 데이터 취득 방법을 안내한다.
 
+## Colab 데모
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/urbsn4i-sw/urban-traffic-forecasting/blob/main/notebooks/demo.ipynb)
+
+브라우저에서 파이프라인을 체험하세요: 데이터 → 기준선 → **시연용** STGNN 짧은 학습 → 저장소의
+**전체 학습 결과** 로드 → 시각화(센서 예측, RQ2 오차 누적, RQ1 인접행렬 모드, 두 도시).
+⚠️ 노트북 안의 2에폭 학습은 **시연**이며 **최종 수치가 아닙니다** — 노트북이 `results/*.json`(전체
+학습)을 불러와 시연값과 **명확히 구분**합니다. 노트북: [`notebooks/demo.ipynb`](notebooks/demo.ipynb).
+
 ## 파이프라인
 ```mermaid
 flowchart LR

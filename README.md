@@ -15,6 +15,15 @@ Only values from actual runs (`metrics.json`) are reported. Anything not run is 
 **limitation**. Raw data, adjacency files, and model weights are **never committed** (blocked by
 `.gitignore`); `scripts/download_data.sh` documents how to obtain the data yourself.
 
+## Colab demo
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/urbsn4i-sw/urban-traffic-forecasting/blob/main/notebooks/demo.ipynb)
+
+Try the pipeline in your browser: data → baselines → a short **demo** STGNN train → load the **full**
+committed results → visualizations (sensor forecast, RQ2 error accumulation, RQ1 adjacency modes, two
+cities). ⚠️ The in-notebook 2-epoch training is a **demo** (not the final numbers) — the notebook loads
+`results/*.json` (full training) and keeps the two clearly separate. Notebook:
+[`notebooks/demo.ipynb`](notebooks/demo.ipynb).
+
 ## Pipeline
 ```mermaid
 flowchart LR
