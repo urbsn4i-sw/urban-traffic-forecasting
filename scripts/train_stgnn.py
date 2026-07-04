@@ -56,8 +56,11 @@ def load_config(path: Path) -> dict:
         return yaml.safe_load(f)
 
 
-def prepare(cfg, device):
-    """특징/타깃 텐서·분할 인덱스·고정 인접행렬 준비. 모든 텐서를 device 에 올린다."""
+def prepare(cfg, ds, device):
+    """특징/타깃 텐서·분할 인덱스·고정 인접행렬 준비. 모든 텐서를 device 에 올린다.
+
+    ds: 데이터셋 스펙 dict (h5_file · dist_csv · dist_csv_has_header).
+    """
     import numpy as np
     import pandas as pd
     import torch
@@ -69,7 +72,7 @@ def prepare(cfg, device):
               float(cfg["data"]["test_ratio"]))
     data_dir = _TASK_DIR / cfg["data"]["root"]
 
-    df = pd.read_hdf(data_dir / cfg["data"]["h5_file"])
+    df = pd.read_hdf(data_dir / ds["h5_file"])
     speed = df.values.astype(np.float64)                      # (T, N) 원 단위(mph)
     T, N = speed.shape
     idx = pd.DatetimeIndex(df.index)
@@ -85,7 +88,8 @@ def prepare(cfg, device):
 
     # 고정 인접행렬: 거리 CSV → 커널 → random-walk 정규화 (sensor_ids = h5 컬럼 순서)
     sensor_ids = [str(c) for c in df.columns]
-    Dmx = D.build_distance_matrix(data_dir / "sensor_graph" / "distances_la_2012.csv", sensor_ids)
+    Dmx = D.build_distance_matrix(data_dir / ds["dist_csv"], sensor_ids,
+                                  has_header=bool(ds.get("dist_csv_has_header", True)))
     adj = G.normalize_adj_random_walk(
         G.gaussian_kernel_adjacency(Dmx, threshold=float(cfg["model"]["adjacency"]["kernel_threshold"])))
     edge_density = float((adj > 0).mean())
@@ -252,9 +256,29 @@ def baseline_scores(tens, horizons):
     return {"copy_last": _score(pred_copy), "seasonal_historical_average": _score(pred_ha)}
 
 
+# 논문 참조값(reference only) — 데이터셋별. 축소 설정과 달라 직접 비교 아님(우리 결과 아님).
+REFERENCE = {
+    "metr-la": {
+        "note": "DCRNN(Li+ 2018)/Graph WaveNet(Wu+ 2019) METR-LA test MAE. 축소 설정과 달라 직접 비교 아님.",
+        "DCRNN_paper_mae": {"h3": 2.77, "h6": 3.15, "h12": 3.60},
+        "GraphWaveNet_paper_mae": {"h3": 2.69, "h6": 3.07, "h12": 3.53},
+        "HA_paper_mae": {"h3": 4.16, "h6": 4.16, "h12": 4.16},
+    },
+    "pems-bay": {
+        "note": "DCRNN/Graph WaveNet 논문 PEMS-BAY test MAE. 축소 설정과 달라 직접 비교 아님.",
+        "DCRNN_paper_mae": {"h3": 1.38, "h6": 1.74, "h12": 2.07},
+        "GraphWaveNet_paper_mae": {"h3": 1.30, "h6": 1.63, "h12": 1.95},
+        "HA_paper_mae": {"h3": 2.88, "h6": 2.88, "h12": 2.88},
+    },
+}
+DISPLAY = {"metr-la": "METR-LA", "pems-bay": "PEMS-BAY"}
+
+
 def main(argv=None) -> int:
-    p = argparse.ArgumentParser(description="METR-LA 소형 STGNN 학습 + RQ1 절제")
+    p = argparse.ArgumentParser(description="교통 소형 STGNN 학습 + RQ1 절제 (METR-LA / PEMS-BAY)")
     p.add_argument("--config", type=Path, default=_TASK_DIR / "config" / "base.yaml")
+    p.add_argument("--dataset", default=None, choices=["metr-la", "pems-bay"],
+                   help="config data.dataset 오버라이드")
     p.add_argument("--modes", nargs="+", default=["fixed", "learned", "hybrid", "identity"])
     p.add_argument("--epochs", type=int, default=None, help="config train.epochs 오버라이드")
     p.add_argument("--batch-size", type=int, default=None)
@@ -271,6 +295,9 @@ def main(argv=None) -> int:
 
     import torch
     cfg = load_config(args.config)
+    dataset = args.dataset or str(cfg["data"]["dataset"])
+    ds = cfg["datasets"][dataset]
+    ds_name = DISPLAY.get(dataset, dataset)
     seed = int(cfg.get("seed", 42))
     horizons = tuple(cfg["metrics"]["horizons"])
     tr = cfg["train"]
@@ -283,8 +310,8 @@ def main(argv=None) -> int:
     fell_back = (want == "cuda" and device == "cpu")
 
     set_seed(seed)
-    tens = prepare(cfg, device)
-    print(f"[stgnn] device={device}{' (CUDA 미탐지 → CPU 폴백)' if fell_back else ''} "
+    tens = prepare(cfg, ds, device)
+    print(f"[stgnn] dataset={ds_name} device={device}{' (CUDA 미탐지 → CPU 폴백)' if fell_back else ''} "
           f"torch={torch.__version__} seed={seed} epochs={epochs} batch={batch_size}")
     print(f"[stgnn] data (T,N)=({tens['T']},{tens['N']}) windows train/val/test="
           f"{tens['n_train']}/{tens['n_val']}/{tens['n_test']} adj_edge_density={tens['edge_density']:.3f}")
@@ -304,7 +331,7 @@ def main(argv=None) -> int:
 
     baselines = baseline_scores(tens, horizons)
 
-    run_id = datetime.now(timezone.utc).strftime(f"{args.tag}-metr-la-%Y%m%dT%H%M%SZ")
+    run_id = datetime.now(timezone.utc).strftime(f"{args.tag}-{dataset}-%Y%m%dT%H%M%SZ")
     out_dir = args.out or (_TASK_DIR / "results" / run_id)
     out_dir.mkdir(parents=True, exist_ok=True)
     gpu_name = torch.cuda.get_device_name(0) if device == "cuda" else "n/a"
@@ -313,7 +340,7 @@ def main(argv=None) -> int:
         "synthetic_dummy": False,
         "task": "urban-traffic-forecasting", "phase": "Phase 2-B — STGNN 학습 + RQ1 절제",
         "note": "SOTA 재현 아님(원리 재현). 결측=0 masked MAE/RMSE/MAPE. 논문값은 reference_only.",
-        "dataset": {"name": "METR-LA", "shape_T_N": [tens["T"], tens["N"]],
+        "dataset": {"name": ds_name, "id": dataset, "shape_T_N": [tens["T"], tens["N"]],
                     "sample_freq_min": 5, "source": "liyaguang/DCRNN (연구용 공개)"},
         "protocol": {"seq_len_in": tens["t_in"], "horizon": tens["horizon"],
                      "horizons_steps": list(horizons),
@@ -328,12 +355,7 @@ def main(argv=None) -> int:
                              "cuda_fallback_to_cpu": fell_back}},
         "stgnn_test": {m: {**stgnn_results[m], "train_meta": stgnn_meta[m]} for m in args.modes},
         "baselines_test": baselines,
-        "reference_only": {
-            "note": "DCRNN 논문(Li+ 2018 Table 1) METR-LA test. 우리 소형/축소 설정과 달라 직접 비교 아님.",
-            "DCRNN_paper_mae": {"h3": 2.77, "h6": 3.15, "h12": 3.60},
-            "GraphWaveNet_paper_mae": {"h3": 2.69, "h6": 3.07, "h12": 3.53},
-            "HA_paper_mae": {"h3": 4.16, "h6": 4.16, "h12": 4.16},
-        },
+        "reference_only": REFERENCE.get(dataset, {"note": "참조값 없음"}),
     }
     M.save_metrics(metrics, out_dir / "metrics.json")
 
@@ -343,9 +365,12 @@ def main(argv=None) -> int:
         return (f"| {name} | {m['h3']:.3f} | {m['h6']:.3f} | {m['h12']:.3f} "
                 f"| {r['at_horizons']['rmse']['h12']:.3f} | {r['at_horizons']['mape']['h12']:.2f} "
                 f"| {d['slope']:.4f} | {extra} |")
+    ref = REFERENCE.get(dataset, {}).get("DCRNN_paper_mae", {})
+    ref_row = (f"| *(참조)* *DCRNN 논문* | *{ref.get('h3','—')}* | *{ref.get('h6','—')}* "
+               f"| *{ref.get('h12','—')}* | *—* | *—* | *—* | *참조용* |") if ref else ""
     lines = [
-        f"# METR-LA STGNN + 기준선 — {run_id}", "",
-        f"- 데이터 METR-LA (T,N)=({tens['T']},{tens['N']}), test {tens['n_test']} 윈도우, 원 단위(mph), masked(null=0)",
+        f"# {ds_name} STGNN + 기준선 — {run_id}", "",
+        f"- 데이터 {ds_name} (T,N)=({tens['T']},{tens['N']}), test {tens['n_test']} 윈도우, 원 단위(mph), masked(null=0)",
         f"- 프로토콜 과거 {tens['t_in']}→미래 {tens['horizon']} 스텝, 특징=[zscore speed, time-of-day]",
         f"- device={device}, seed={seed}, epochs_cap={epochs}, batch={batch_size}, git={_git_hash()[:8]}",
         f"- SOTA 재현 아님(원리 재현). 논문값은 참조용(설정 차이로 직접 비교 아님).", "",
@@ -358,8 +383,10 @@ def main(argv=None) -> int:
         meta = stgnn_meta[m]
         lines.append(mae_row(f"STGNN ({m})", stgnn_results[m],
                              f"{meta['train_time_sec']}s·{meta['peak_vram_gb']}GB·ep{meta['best_epoch']}"))
+    if ref_row:
+        lines.append(ref_row)
     lines += [
-        f"| *(참조)* *DCRNN 논문* | *2.77* | *3.15* | *3.60* | *—* | *—* | *—* | *참조용* |", "",
+        "",
         "> RQ1(고정 vs 학습): 위 STGNN 행들의 fixed vs learned/hybrid MAE 비교.",
         "> RQ2(오차 누적): MAE기울기(스텝당) — 기준선 copy-last 대비 STGNN 이 덜 누적하는지.",
     ]

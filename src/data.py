@@ -101,11 +101,12 @@ def synthetic_traffic(
     return speed
 
 
-def build_distance_matrix(dist_csv: str | Path, sensor_ids):
+def build_distance_matrix(dist_csv: str | Path, sensor_ids, has_header: bool = True):
     """센서 거리 CSV(from,to,cost) → 거리 행렬 (N,N), sensor_ids 순서로 정렬.
 
     미연결 쌍은 inf, 자기 자신은 0. 이후 graph.gaussian_kernel_adjacency 로 가중치화.
     (DCRNN 방식: 이 거리행렬의 유한값 std 를 sigma 로 사용.)
+    has_header: 첫 줄이 헤더(from,to,cost)면 True(METR-LA), 헤더 없으면 False(PEMS-BAY).
     """
     import numpy as np  # noqa: PLC0415
     import pandas as pd  # noqa: PLC0415
@@ -114,7 +115,11 @@ def build_distance_matrix(dist_csv: str | Path, sensor_ids):
     n = len(ids)
     D = np.full((n, n), np.inf, dtype=np.float64)
     np.fill_diagonal(D, 0.0)
-    df = pd.read_csv(dist_csv, dtype={"from": str, "to": str})
+    if has_header:
+        df = pd.read_csv(dist_csv, dtype={"from": str, "to": str})
+    else:
+        df = pd.read_csv(dist_csv, header=None, names=["from", "to", "cost"],
+                         dtype={"from": str, "to": str})
     for frm, to, cost in df.itertuples(index=False):
         if frm in pos and to in pos:
             D[pos[frm], pos[to]] = cost
