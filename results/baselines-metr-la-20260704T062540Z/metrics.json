@@ -1,6 +1,6 @@
 {
   "synthetic_dummy": false,
-  "task": "task-02-traffic-stgnn",
+  "task": "urban-traffic-forecasting",
   "phase": "Phase 1 — 실 데이터 기준선",
   "dataset": {
     "name": "METR-LA",
@@ -44,8 +44,8 @@
   },
   "run": {
     "seed": 42,
-    "git_commit": "f152624f3c6cafd5cad929899a11a5d51b8617a7",
-    "timestamp_utc": "20260704T035357Z",
+    "git_commit": "9baa6e1d9248d284ec0e2bff54e6bd2774f01b1c",
+    "timestamp_utc": "20260704T062540Z",
     "hardware": {
       "platform": "Windows-11-10.0.26200-SP0",
       "processor": "Intel64 Family 6 Model 191 Stepping 2, GenuineIntel",

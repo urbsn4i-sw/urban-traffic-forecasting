@@ -69,30 +69,30 @@ features `[z-score speed, time-of-day]`, seed 42, ≤50 epochs, batch 256, **RTX
 | copy-last (persistence) | 4.017 | 5.094 | 6.795 | 14.209 | 16.71 | 0.332 |
 | seasonal-HA (DCRNN def.) | 4.187 | 4.187 | 4.187 | 7.852 | 13.03 | ~0.000 |
 | STGNN **fixed** (road-graph A) | 3.112 | 3.795 | 4.889 | 9.500 | 14.38 | 0.212 |
-| STGNN **learned** (adaptive A) | **2.998** | **3.499** | **4.276** | **8.296** | **13.09** | 0.155 |
-| STGNN **hybrid** (fixed+adaptive) | 3.007 | 3.525 | 4.307 | 8.329 | 13.17 | 0.159 |
-| STGNN **identity** (no graph) | 3.149 | 3.841 | 4.953 | 9.707 | 14.69 | 0.215 |
+| STGNN **learned** (adaptive A) | **2.998** | **3.497** | **4.273** | **8.290** | **13.07** | 0.154 |
+| STGNN **hybrid** (fixed+adaptive) | 2.998 | 3.516 | 4.298 | 8.318 | 13.03 | 0.159 |
+| STGNN **identity** (no graph) | 3.147 | 3.841 | 4.951 | 9.708 | 14.72 | 0.215 |
 | *(reference)* *DCRNN paper (Li+ 2018)* | *2.77* | *3.15* | *3.60* | *—* | *—* | *—* |
 | *(reference)* *HA paper (Li+ 2018)* | *4.16* | *4.16* | *4.16* | *7.80* | *13.0* | *~0* |
 
 > ⚠️ Paper numbers are **reference only** — our reduced setup (2-layer, 2 features, ≤50 epochs) differs,
 > so this is **not a direct comparison** and we never copy paper values into our results.
-> Full data: [`results/`](results/) `metrics.json`.
+> Full data: [`results/stgnn-metr-la-20260704T064753Z/metrics.json`](results/stgnn-metr-la-20260704T064753Z/metrics.json).
 
 ### RQ1 — fixed vs learned adjacency
 - **The graph helps:** `identity` (no graph) is the worst STGNN (4.95 @60m). Adding a road-graph or an
   adaptive graph improves it.
-- **Learned beats fixed:** `learned` (3.00/3.50/4.28) outperforms `fixed` road-graph (3.11/3.80/4.89) at
+- **Learned beats fixed:** `learned` (3.00/3.50/4.27) outperforms `fixed` road-graph (3.11/3.80/4.89) at
   every horizon. **Answer: learning the adjacency from data beats the fixed road-network graph** (in this
   reduced setup). `hybrid` ≈ `learned` (combining does not clearly beat learning alone).
 
 ### Does the STGNN beat the baselines?
 - vs **copy-last**: STGNN wins at every horizon.
 - vs **seasonal-HA**: STGNN wins at 15/30 min (3.00 vs 4.19 @15m); at **60 min seasonal-HA is marginally
-  better** (4.19 vs learned 4.28). Reported honestly — long-horizon seasonality is a strong baseline.
+  better** (4.19 vs learned 4.27). Reported honestly — long-horizon seasonality is a strong baseline.
 
 ### RQ2 — multi-step error accumulation
-Per-step MAE slope: copy-last **0.332** → STGNN-learned **0.155** (≈ half). The STGNN **accumulates error
+Per-step MAE slope: copy-last **0.332** → STGNN-learned **0.154** (≈ half). The STGNN **accumulates error
 about half as fast** as persistence. seasonal-HA is flat (0) by construction (it reads only the target
 time-of-week slot, so it does not accumulate).
 

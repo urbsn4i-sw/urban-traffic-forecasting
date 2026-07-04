@@ -1,9 +1,9 @@
-# METR-LA 기준선 실측 — baselines-metr-la-20260704T035357Z
+# METR-LA 기준선 실측 — baselines-metr-la-20260704T062540Z
 
 - 데이터: METR-LA (T,N)=(34272,207), 결측 8.11% (=0 마스크)
 - 프로토콜: 과거 12스텝 → 미래 12스텝, 시간순 70%/10%/20%, eval=test
 - 분할(윈도우): train 23974 / val 3425 / test 6850 (총 34249)
-- seed=42, git=f152624f, device=CPU
+- seed=42, git=9baa6e1d, device=CPU
 
 ## MAE/RMSE/MAPE (test, 원 단위 mph / %)
 
